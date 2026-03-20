@@ -1,30 +1,26 @@
 ---
 name: monglebel-image-gen
-description: "MongeulBell image generation skill. Automatically generates game art images (cards, UI, characters, environments) using Pollinations AI API. Use PROACTIVELY whenever creating visual assets for MongeulBell."
+description: "MongeulBell image generation skill. Automatically generates game art images (cards, UI, characters, environments) using OpenAI DALL-E 3 API. Use PROACTIVELY whenever creating visual assets for MongeulBell."
 argument-hint: "[description of what to generate]"
 metadata:
   author: MongeulBell
-  version: 1.0.0
-  tags: [unity, image, generation, art, pollinations, monglebel]
+  version: 2.0.0
+  tags: [unity, image, generation, art, openai, dalle, monglebel]
   model: opus
 ---
 
-# MongeulBell Image Generation Skill
+# MongeulBell Image Generation Skill (OpenAI DALL-E 3)
 
-MongeulBell 프로젝트의 모든 이미지 에셋을 **Pollinations AI API**로 자동 생성한다.
-수동 복사-붙여넣기 없이, Claude Code가 직접 요청 → 다운로드 → 저장까지 자동 처리.
+MongeulBell 프로젝트의 모든 이미지 에셋을 **OpenAI DALL-E 3 API**로 자동 생성한다.
+Claude Code가 직접 Python + openai 라이브러리로 요청 → 다운로드 → 저장까지 자동 처리.
 
 ---
 
-## 1. 생성 엔드포인트
+## 1. 사전 요구사항
 
-```
-https://image.pollinations.ai/prompt/{URL_ENCODED_PROMPT}?width={W}&height={H}&nologo=true&seed={SEED}
-```
-
-- **Method**: GET (URL에 프롬프트를 인코딩하여 요청)
-- **Response**: PNG 이미지 바이너리
-- **Rate Limit**: 요청 사이 2초 대기 권장
+- **환경변수**: `OPENAI_API_KEY` 가 시스템에 설정되어 있어야 한다
+- **Python 패키지**: `openai` (`python -m pip install openai`)
+- **과금**: DALL-E 3 standard 1024x1024 = ~$0.04/장, HD = ~$0.08/장
 
 ---
 
@@ -43,98 +39,65 @@ No text on the image. No UI elements unless explicitly requested.
 
 ## 3. 에셋 타입별 설정
 
-| Asset Type | Width | Height | Aspect | Notes |
-|------------|-------|--------|--------|-------|
-| Card Illustration | 768 | 1024 | 3:4 | 세로 카드 |
-| Card Frame/Back | 768 | 1024 | 3:4 | 세로 카드 |
-| Character Portrait | 512 | 512 | 1:1 | 정사각형 |
-| Enemy Sprite | 512 | 512 | 1:1 | 정사각형 |
-| Spirit Portrait | 512 | 512 | 1:1 | 정사각형 |
-| Tower Design | 512 | 768 | 2:3 | 세로형 |
-| UI Icon | 256 | 256 | 1:1 | 작은 아이콘 |
-| Background/Scene | 1024 | 576 | 16:9 | 배경 |
-| Board Tile | 512 | 512 | 1:1 | 보드 타일 |
+| Asset Type | DALL-E Size | Notes |
+|------------|-------------|-------|
+| Card Illustration | 1024x1024 | 정사각형 (후처리로 3:4 크롭) |
+| Card Frame/Back | 1024x1024 | 정사각형 |
+| Character Portrait | 1024x1024 | 정사각형 |
+| Enemy Sprite | 1024x1024 | 정사각형 |
+| Spirit Portrait | 1024x1024 | 정사각형 |
+| Tower Design | 1024x1792 | 세로형 |
+| UI Icon | 1024x1024 | 정사각형 (후처리로 축소) |
+| Background/Scene | 1792x1024 | 가로형 |
+| Board Tile | 1024x1024 | 정사각형 |
+
+DALL-E 3 지원 사이즈: `1024x1024`, `1024x1792`, `1792x1024`
 
 ---
 
-## 4. 자동 생성 프로세스
+## 4. 자동 생성 코드
 
-### Step 1: 프롬프트 구성
-```
-{공통 스타일 프리픽스}
-Background: {배경 설명}
-Subject: {구체적 내용 설명}
-```
-
-### Step 2: URL 생성
-```python
-import urllib.parse
-encoded = urllib.parse.quote(prompt)
-url = f"https://image.pollinations.ai/prompt/{encoded}?width={W}&height={H}&nologo=true&seed={seed}"
-```
-
-### Step 3: 다운로드
-```python
-import urllib.request
-req = urllib.request.Request(url, headers={"User-Agent": "MongeulBell/1.0"})
-with urllib.request.urlopen(req, timeout=120) as resp:
-    with open(filepath, "wb") as f:
-        f.write(resp.read())
-```
-
-### Step 4: 저장 위치
-
-| Asset Type | Save Path |
-|------------|-----------|
-| Card Art | `Downloads/MongeulBell_Card_Images/` |
-| Character Art | `Downloads/MongeulBell_Character_Art/` |
-| Enemy Art | `Downloads/MongeulBell_Enemy_Art/` |
-| UI Assets | `Downloads/MongeulBell_UI_Assets/` |
-| Background | `Downloads/MongeulBell_Backgrounds/` |
-| General | `Downloads/MongeulBell_Generated_Art/` |
-
----
-
-## 5. 금지 스타일 (절대 프롬프트에 넣지 않기)
-
-- `dark`, `horror`, `gore`, `blood`, `scary`
-- `realistic`, `photorealistic`, `hyperrealistic`
-- `sharp`, `aggressive`, `military`, `mechanical`
-- `complex UI`, `cluttered`
-- `ugly`, `disgusting`, `grotesque`
-
----
-
-## 6. 권장 스타일 키워드
-
-- `cute`, `chibi`, `kawaii`, `adorable`
-- `rounded`, `soft`, `cozy`, `warm`
-- `pastel`, `magical`, `sparkle`, `glow`
-- `toy-like`, `diorama`, `storybook`
-- `child-friendly`, `whimsical`, `fantasy`
-
----
-
-## 7. 재생성 가이드
-
-마음에 안 들면:
-1. `seed` 값만 바꿔서 재시도 (같은 프롬프트, 다른 결과)
-2. 프롬프트에 디테일 추가: "more rounded", "softer colors", "bigger eyes"
-3. 원하는 분위기 키워드 추가: "more magical", "warmer lighting"
-
----
-
-## 8. 배치 생성 스크립트 템플릿
-
-여러 이미지를 한번에 생성할 때:
+### 단일 이미지 생성
 
 ```python
-import urllib.request, urllib.parse, os, time
+import os, urllib.request
+from openai import OpenAI
 
-OUTPUT_DIR = "Downloads/MongeulBell_Generated_Art/"
+client = OpenAI()  # OPENAI_API_KEY 환경변수 자동 사용
+
+STYLE = (
+    "Style: Cute fantasy mobile game illustration. "
+    "Art direction: Rounded shapes, pastel colors, warm lighting, "
+    "toy-like diorama feel, storybook aesthetic. "
+    "The image should feel cozy and child-friendly. "
+    "No text on the image. "
+)
+
+prompt = STYLE + "Background: Soft pink gradient. Subject: A tiny cute flower fairy archer on a petal tower."
+
+response = client.images.generate(
+    model="dall-e-3",
+    prompt=prompt,
+    size="1024x1024",
+    quality="standard",
+    n=1,
+)
+
+image_url = response.data[0].url
+urllib.request.urlretrieve(image_url, "output.png")
+```
+
+### 배치 생성 (여러 장)
+
+```python
+import os, urllib.request, time
+from openai import OpenAI
+
+client = OpenAI()
+OUTPUT_DIR = r"C:\Users\PC\Downloads\MongeulBell_Generated_Art"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-STYLE_PREFIX = (
+STYLE = (
     "Style: Cute fantasy mobile game illustration. "
     "Art direction: Rounded shapes, pastel colors, warm lighting, "
     "toy-like diorama feel, storybook aesthetic. "
@@ -148,19 +111,63 @@ images = {
 }
 
 for name, subject in images.items():
-    prompt = STYLE_PREFIX + subject
-    encoded = urllib.parse.quote(prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true"
-    filepath = os.path.join(OUTPUT_DIR, f"{name}.png")
-
+    prompt = STYLE + subject
     print(f"Generating {name}...")
-    req = urllib.request.Request(url, headers={"User-Agent": "MongeulBell/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        with open(filepath, "wb") as f:
-            f.write(resp.read())
+    response = client.images.generate(
+        model="dall-e-3",
+        prompt=prompt,
+        size="1024x1024",
+        quality="standard",
+        n=1,
+    )
+    filepath = os.path.join(OUTPUT_DIR, f"{name}.png")
+    urllib.request.urlretrieve(response.data[0].url, filepath)
     print(f"  Saved: {filepath}")
-    time.sleep(2)
+    time.sleep(1)
 ```
+
+---
+
+## 5. 저장 위치
+
+| Asset Type | Save Path |
+|------------|-----------|
+| Card Art | `Downloads/MongeulBell_Card_Images/` |
+| Character Art | `Downloads/MongeulBell_Character_Art/` |
+| Enemy Art | `Downloads/MongeulBell_Enemy_Art/` |
+| UI Assets | `Downloads/MongeulBell_UI_Assets/` |
+| Background | `Downloads/MongeulBell_Backgrounds/` |
+| General | `Downloads/MongeulBell_Generated_Art/` |
+
+---
+
+## 6. 금지 스타일 (절대 프롬프트에 넣지 않기)
+
+- `dark`, `horror`, `gore`, `blood`, `scary`
+- `realistic`, `photorealistic`, `hyperrealistic`
+- `sharp`, `aggressive`, `military`, `mechanical`
+- `complex UI`, `cluttered`
+- `ugly`, `disgusting`, `grotesque`
+
+---
+
+## 7. 권장 스타일 키워드
+
+- `cute`, `chibi`, `kawaii`, `adorable`
+- `rounded`, `soft`, `cozy`, `warm`
+- `pastel`, `magical`, `sparkle`, `glow`
+- `toy-like`, `diorama`, `storybook`
+- `child-friendly`, `whimsical`, `fantasy`
+
+---
+
+## 8. 재생성 가이드
+
+마음에 안 들면:
+1. 같은 프롬프트로 다시 요청 (DALL-E 3는 매번 다른 결과)
+2. 프롬프트에 디테일 추가: "more rounded", "softer colors", "bigger eyes"
+3. 원하는 분위기 키워드 추가: "more magical", "warmer lighting"
+4. `quality="hd"` 로 변경 (더 세밀, 비용 2배)
 
 ---
 
@@ -183,8 +190,8 @@ User: "꽃잎 궁수 카드 이미지 만들어줘"
 
 Claude:
 1. 공통 스타일 프리픽스 + 꽃잎 궁수 프롬프트 구성
-2. Pollinations API URL 생성 (768x1024, 3:4)
-3. Python urllib로 다운로드
+2. OpenAI DALL-E 3 API 호출 (1024x1024, standard)
+3. 반환된 URL에서 이미지 다운로드
 4. Downloads/MongeulBell_Card_Images/BlossomArcher.png 저장
 5. 결과 확인 (파일 크기, 저장 경로 보고)
 ```
